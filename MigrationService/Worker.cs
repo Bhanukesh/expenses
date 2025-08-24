@@ -20,7 +20,7 @@ public class Worker(
         try
         {
             using var scope = serviceProvider.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<TodoDbContext>();
+            var dbContext = scope.ServiceProvider.GetRequiredService<ExpenseDbContext>();
 
             await EnsureDatabaseAsync(dbContext, cancellationToken);
             await RunMigrationAsync(dbContext, cancellationToken);
@@ -34,7 +34,7 @@ public class Worker(
         hostApplicationLifetime.StopApplication();
     }
 
-    private static async Task EnsureDatabaseAsync(TodoDbContext dbContext, CancellationToken cancellationToken)
+    private static async Task EnsureDatabaseAsync(ExpenseDbContext dbContext, CancellationToken cancellationToken)
     {
         var dbCreator = dbContext.GetService<IRelationalDatabaseCreator>();
 
@@ -50,7 +50,7 @@ public class Worker(
         });
     }
 
-    private static async Task RunMigrationAsync(TodoDbContext dbContext, CancellationToken cancellationToken)
+    private static async Task RunMigrationAsync(ExpenseDbContext dbContext, CancellationToken cancellationToken)
     {
         var strategy = dbContext.Database.CreateExecutionStrategy();
         await strategy.ExecuteAsync(async () =>

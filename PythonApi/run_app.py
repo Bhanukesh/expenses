@@ -9,7 +9,7 @@ if __name__ == "__main__":
 
     uvicorn.run(
         "main:app",
-        host="0.0.0.0",
+        host="127.0.0.1",  # Changed from 0.0.0.0 to 127.0.0.1 for local development
         port=port,
         workers=1, # Can only be 1 since we are using an in-memory database
         reload=False  # Set to False in production

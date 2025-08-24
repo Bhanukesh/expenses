@@ -1,17 +1,27 @@
 from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime
+from decimal import Decimal
 
 
-class TodoItem(BaseModel):
+class ExpenseItem(BaseModel):
     id: int
-    title: Optional[str] = None
-    isComplete: bool = False
+    description: str
+    amount: Decimal
+    category: str
+    date: datetime
+    raw_text: Optional[str] = None
 
 
-class CreateTodoCommand(BaseModel):
-    title: str
+class CreateExpenseCommand(BaseModel):
+    raw_text: str
 
 
-class UpdateTodoCommand(BaseModel):
-    title: str
-    isComplete: bool
+class CategorizeExpenseRequest(BaseModel):
+    description: str
+    amount: Decimal
+
+
+class CategorizeExpenseResponse(BaseModel):
+    category: str
+    confidence: float

@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <Sdk Name="Aspire.AppHost.Sdk" Version="9.4.0" />
+  <Sdk Name="Aspire.AppHost.Sdk" Version="9.4.1" />
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -16,10 +16,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Aspire.Hosting.AppHost" Version="9.4.0" />
-    <PackageReference Include="Aspire.Hosting.NodeJs" Version="9.4.0" />
-    <PackageReference Include="Aspire.Hosting.Python" Version="9.4.0" />
-    <PackageReference Include="Aspire.Hosting.SqlServer" Version="9.4.0" />
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="9.4.1" />
+    <PackageReference Include="Aspire.Hosting.NodeJs" Version="9.4.1" />
+    <PackageReference Include="Aspire.Hosting.Python" Version="9.4.1" />
+    <PackageReference Include="Aspire.Hosting.SqlServer" Version="9.4.1" />
   </ItemGroup>
 
   <!-- Restore pnpm packages for web projects during build -->

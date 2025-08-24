@@ -9,6 +9,7 @@ export const emptySplitApi = createApi({
       return headers
     },
   }),
+  tagTypes: ['Expense'],
   endpoints: () => ({}),
 })
 
