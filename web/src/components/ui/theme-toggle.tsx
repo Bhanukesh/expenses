@@ -5,17 +5,20 @@ import { Button } from "@/components/ui/button"
 import { useTheme } from "@/contexts/ThemeContext"
 
 export function ThemeToggle() {
-  const { toggleTheme } = useTheme()
+  const { theme, toggleTheme } = useTheme()
 
   return (
     <Button
-      variant="outline"
-      size="icon"
+      variant="ghost"
+      size="sm"
       onClick={toggleTheme}
-      className="relative"
+      className="rounded-full h-8 w-8 p-0 hover:bg-secondary/80 transition-colors"
     >
-      <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-      <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+      {theme === 'dark' ? (
+        <Sun className="h-4 w-4 text-yellow-500" />
+      ) : (
+        <Moon className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+      )}
       <span className="sr-only">Toggle theme</span>
     </Button>
   )

@@ -17,14 +17,22 @@ public class CreateExpenseHandler(ExpenseDbContext context, IHttpClientFactory h
         // Call Python API for categorization only
         var category = await GetCategoryFromPythonApi(description, amount, cancellationToken);
 
+        // Extract additional metadata from raw text
+        var tags = ExtractTags(request.RawText);
+        var location = ExtractLocation(request.RawText);
+        
         // Create entity in SQL Server database
         var entity = new Expense
         {
             Description = description,
             Amount = amount,
             Category = category,
-            Date = DateTime.Now,
-            RawText = request.RawText
+            Date = DateTime.UtcNow,
+            RawText = request.RawText,
+            Tags = tags,
+            Location = location,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
         };
 
         context.Expenses.Add(entity);
@@ -103,14 +111,79 @@ public class CreateExpenseHandler(ExpenseDbContext context, IHttpClientFactory h
     {
         var lowerDesc = description.ToLower();
         
-        if (lowerDesc.Contains("pizza") || lowerDesc.Contains("food") || lowerDesc.Contains("coffee") || lowerDesc.Contains("lunch"))
+        if (lowerDesc.Contains("pizza") || lowerDesc.Contains("food") || lowerDesc.Contains("coffee") || lowerDesc.Contains("lunch") || lowerDesc.Contains("dinner") || lowerDesc.Contains("restaurant"))
             return "Food";
-        if (lowerDesc.Contains("uber") || lowerDesc.Contains("gas") || lowerDesc.Contains("transport"))
+        if (lowerDesc.Contains("uber") || lowerDesc.Contains("gas") || lowerDesc.Contains("transport") || lowerDesc.Contains("bus") || lowerDesc.Contains("taxi") || lowerDesc.Contains("metro"))
             return "Transport";
-        if (lowerDesc.Contains("movie") || lowerDesc.Contains("entertainment"))
+        if (lowerDesc.Contains("movie") || lowerDesc.Contains("entertainment") || lowerDesc.Contains("concert") || lowerDesc.Contains("game"))
             return "Entertainment";
+        if (lowerDesc.Contains("shop") || lowerDesc.Contains("store") || lowerDesc.Contains("buy"))
+            return "Shopping";
+        if (lowerDesc.Contains("hospital") || lowerDesc.Contains("doctor") || lowerDesc.Contains("medicine") || lowerDesc.Contains("pharmacy"))
+            return "Health";
+        if (lowerDesc.Contains("book") || lowerDesc.Contains("course") || lowerDesc.Contains("school") || lowerDesc.Contains("university"))
+            return "Education";
             
         return "Other";
+    }
+    
+    private static List<string> ExtractTags(string rawText)
+    {
+        var tags = new List<string>();
+        var lowerText = rawText.ToLower();
+        
+        // Common tags based on keywords
+        var tagMap = new Dictionary<string, string[]>
+        {
+            ["lunch"] = ["lunch", "meal"],
+            ["dinner"] = ["dinner", "meal"],
+            ["breakfast"] = ["breakfast", "meal"],
+            ["coffee"] = ["coffee", "drink"],
+            ["campus"] = ["campus", "university"],
+            ["work"] = ["work", "office"],
+            ["home"] = ["home"],
+            ["urgent"] = ["urgent", "emergency"],
+            ["monthly"] = ["monthly", "recurring"],
+            ["weekly"] = ["weekly", "recurring"]
+        };
+        
+        foreach (var (keyword, keywordTags) in tagMap)
+        {
+            if (lowerText.Contains(keyword))
+            {
+                tags.AddRange(keywordTags);
+            }
+        }
+        
+        return tags.Distinct().ToList();
+    }
+    
+    private static string? ExtractLocation(string rawText)
+    {
+        var lowerText = rawText.ToLower();
+        
+        // Common location patterns
+        var locationKeywords = new[] { "at ", "from ", "near ", "in " };
+        
+        foreach (var keyword in locationKeywords)
+        {
+            var index = lowerText.IndexOf(keyword, StringComparison.OrdinalIgnoreCase);
+            if (index >= 0)
+            {
+                var locationStart = index + keyword.Length;
+                var remainingText = rawText.Substring(locationStart);
+                
+                // Take the next word(s) as location
+                var words = remainingText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (words.Length > 0)
+                {
+                    // Take up to 3 words as location
+                    return string.Join(" ", words.Take(Math.Min(3, words.Length)));
+                }
+            }
+        }
+        
+        return null;
     }
 }
 

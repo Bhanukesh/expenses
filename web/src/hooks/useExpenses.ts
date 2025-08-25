@@ -1,13 +1,44 @@
 'use client'
 
 import { useMemo } from 'react'
-import { useGetExpensesQuery, useCreateExpenseMutation, useDeleteExpenseMutation } from '@/store/api/enhanced/expenses'
+import { 
+  useGetExpensesQuery, 
+  useCreateExpenseMutation, 
+  useDeleteExpenseMutation,
+  useUpdateExpenseMutation,
+  useGetExpenseSummaryQuery 
+} from '@/store/api/enhanced/expenses'
 import type { ExpenseItem } from '@/store/api/generated/expenses'
+import { createExpenseSchema, naturalExpenseInputSchema } from '@/lib/validations'
 
-export function useExpenses() {
-  const { data: expenses = [], isLoading, error, refetch } = useGetExpensesQuery()
-  const [createExpense, { isLoading: isCreating }] = useCreateExpenseMutation()
-  const [deleteExpense, { isLoading: isDeleting }] = useDeleteExpenseMutation()
+interface UseExpensesOptions {
+  filters?: {
+    category?: string
+    fromDate?: Date
+    toDate?: Date
+    tags?: string[]
+    limit?: number
+  }
+}
+
+export function useExpenses(options: UseExpensesOptions = {}) {
+  // Convert Date objects to ISO strings for API
+  const apiFilters = useMemo(() => {
+    if (!options.filters) return {}
+    
+    return {
+      ...options.filters,
+      fromDate: options.filters.fromDate?.toISOString(),
+      toDate: options.filters.toDate?.toISOString()
+    }
+  }, [options.filters])
+
+  const { data: expenses = [], isLoading, error, refetch } = useGetExpensesQuery(apiFilters)
+  const { data: summary, isLoading: isSummaryLoading } = useGetExpenseSummaryQuery(apiFilters)
+  
+  const [createExpenseMutation, { isLoading: isCreating, error: createError }] = useCreateExpenseMutation()
+  const [updateExpenseMutation, { isLoading: isUpdating, error: updateError }] = useUpdateExpenseMutation()
+  const [deleteExpenseMutation, { isLoading: isDeleting, error: deleteError }] = useDeleteExpenseMutation()
 
   // Calculate totals and summaries
   const totals = useMemo(() => {
@@ -63,37 +94,94 @@ export function useExpenses() {
       .slice(0, 5)
   }, [expenses])
 
+  // Validated expense creation
   const handleCreateExpense = async (rawText: string) => {
     try {
-      await createExpense({ createExpenseCommand: { rawText } }).unwrap()
-      refetch()
-    } catch (error) {
+      // Validate input using Zod
+      const validatedInput = naturalExpenseInputSchema.parse({ input: rawText })
+      const validatedExpense = createExpenseSchema.parse({ rawText: validatedInput.input })
+      
+      const result = await createExpenseMutation(validatedExpense.rawText).unwrap()
+      return result
+    } catch (error: any) {
       console.error('Failed to create expense:', error)
+      // Handle validation errors
+      if (error.issues) {
+        throw new Error(error.issues[0]?.message || 'Validation failed')
+      }
+      // Provide more detailed error information
+      const errorMessage = error?.data?.message || error?.message || 'Unknown error occurred'
+      const errorStatus = error?.status || 'Unknown status'
+      console.error('Error details:', { status: errorStatus, message: errorMessage, fullError: error })
+      throw new Error(`Failed to create expense: ${errorMessage} (Status: ${errorStatus})`)
+    }
+  }
+
+  // Update expense with validation
+  const handleUpdateExpense = async (updates: any) => {
+    try {
+      const result = await updateExpenseMutation(updates).unwrap()
+      return result
+    } catch (error: any) {
+      console.error('Failed to update expense:', error)
       throw error
     }
   }
 
+  // Delete expense
   const handleDeleteExpense = async (id: number) => {
     try {
-      await deleteExpense({ id }).unwrap()
-      refetch()
-    } catch (error) {
+      const result = await deleteExpenseMutation(id).unwrap()
+      return result
+    } catch (error: any) {
       console.error('Failed to delete expense:', error)
       throw error
     }
   }
 
+  // Get expenses for a specific category
+  const getExpensesByCategory = (category: string) => {
+    return expenses.filter(expense => expense.category === category)
+  }
+
   return {
+    // Data
     expenses,
     totals,
     expensesByCategory,
     recentExpenses,
+    summary,
+    
+    // Loading states
     isLoading,
+    isSummaryLoading,
     isCreating,
+    isUpdating,
     isDeleting,
-    error,
+    
+    // Operations
     createExpense: handleCreateExpense,
+    updateExpense: handleUpdateExpense,
     deleteExpense: handleDeleteExpense,
-    refetch
+    refetch,
+    
+    // Utilities
+    getExpensesByCategory,
+    
+    // Errors
+    error: error || createError || updateError || deleteError
+  }
+}
+
+// Hook for expense statistics
+export function useExpenseStats(filters?: UseExpensesOptions['filters']) {
+  const { summary, isSummaryLoading } = useExpenses({ filters })
+  
+  return {
+    categoryTotals: summary?.categoryTotals || [],
+    totalAmount: summary?.totalAmount || 0,
+    totalCount: summary?.totalCount || 0,
+    recentExpenses: summary?.recentExpenses || [],
+    isLoading: isSummaryLoading
   }
 }

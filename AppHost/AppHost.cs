@@ -27,7 +27,7 @@ var pythonApi = builder.AddPythonApp("pythonapi", "../PythonApi", "run_app.py")
     .WithEnvironment("HOST", "127.0.0.1");
 #pragma warning restore ASPIREHOSTINGPYTHON001
 
-// Web application
+// Web application - marked as default to open in browser
 builder.AddNpmApp("web", "../web", "dev")
     .WithReference(apiService)
     .WithReference(pythonApi)
@@ -35,4 +35,38 @@ builder.AddNpmApp("web", "../web", "dev")
     .WithExternalHttpEndpoints()
     .PublishAsDockerFile();
 
-builder.Build().Run();
+var app = builder.Build();
+
+// Ensure browser opens to dashboard after a short delay
+_ = Task.Run(async () =>
+{
+    await Task.Delay(3000); // Wait for services to start
+    try
+    {
+        var dashboardUrl = "https://localhost:17280";
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = dashboardUrl,
+            UseShellExecute = true
+        });
+    }
+    catch
+    {
+        // Fallback to HTTP if HTTPS fails
+        try
+        {
+            var dashboardUrl = "http://localhost:15100";
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = dashboardUrl,
+                UseShellExecute = true
+            });
+        }
+        catch
+        {
+            // Silent fail if browser can't be opened
+        }
+    }
+});
+
+app.Run();
