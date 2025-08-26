@@ -19,13 +19,16 @@ builder.Services.AddMediatR(cfg =>
 });
 builder.Services.AddEndpointsApiExplorer();
 
+// Add HTTP client for Python API integration
+builder.Services.AddHttpClient();
+
 // Add database context
-builder.AddSqlServerDbContext<TodoDbContext>("tododb");
+builder.AddSqlServerDbContext<ExpenseDbContext>("expensedb");
 
 builder.Services.AddOpenApiDocument(options =>
 {
     options.DocumentName = "v1";
-    options.Title = "Todos API";
+    options.Title = "Expense Tracker API";
     options.Version = "v1";
     options.UseHttpAttributeNameAsOperationId = true;
     
@@ -48,6 +51,7 @@ app.UseCors(static builder =>
 });
 app.MapDefaultEndpoints();
 app.MapControllers();
+app.MapGet("/health", () => "Healthy");
 app.UseOpenApi();
 app.UseSwaggerUi();
 app.Run();
