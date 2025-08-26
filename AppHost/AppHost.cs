@@ -37,36 +37,4 @@ builder.AddNpmApp("web", "../web", "dev")
 
 var app = builder.Build();
 
-// Ensure browser opens to dashboard after a short delay
-_ = Task.Run(async () =>
-{
-    await Task.Delay(3000); // Wait for services to start
-    try
-    {
-        var dashboardUrl = "https://localhost:17280";
-        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-        {
-            FileName = dashboardUrl,
-            UseShellExecute = true
-        });
-    }
-    catch
-    {
-        // Fallback to HTTP if HTTPS fails
-        try
-        {
-            var dashboardUrl = "http://localhost:15100";
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = dashboardUrl,
-                UseShellExecute = true
-            });
-        }
-        catch
-        {
-            // Silent fail if browser can't be opened
-        }
-    }
-});
-
 app.Run();

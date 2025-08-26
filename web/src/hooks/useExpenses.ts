@@ -9,7 +9,7 @@ import {
   useGetExpenseSummaryQuery 
 } from '@/store/api/enhanced/expenses'
 import type { ExpenseItem } from '@/store/api/generated/expenses'
-import { createExpenseSchema, naturalExpenseInputSchema } from '@/lib/validations'
+import { createExpenseSchema, naturalExpenseInputSchema, type UpdateExpenseInput } from '@/lib/validations'
 
 interface UseExpensesOptions {
   filters?: {
@@ -103,26 +103,28 @@ export function useExpenses(options: UseExpensesOptions = {}) {
       
       const result = await createExpenseMutation(validatedExpense.rawText).unwrap()
       return result
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to create expense:', error)
       // Handle validation errors
-      if (error.issues) {
-        throw new Error(error.issues[0]?.message || 'Validation failed')
+      if (error && typeof error === 'object' && 'issues' in error) {
+        const issues = (error as { issues: Array<{ message?: string }> }).issues
+        throw new Error(issues[0]?.message || 'Validation failed')
       }
       // Provide more detailed error information
-      const errorMessage = error?.data?.message || error?.message || 'Unknown error occurred'
-      const errorStatus = error?.status || 'Unknown status'
+      const errorData = error as { data?: { message?: string }; message?: string; status?: string }
+      const errorMessage = errorData?.data?.message || errorData?.message || 'Unknown error occurred'
+      const errorStatus = errorData?.status || 'Unknown status'
       console.error('Error details:', { status: errorStatus, message: errorMessage, fullError: error })
       throw new Error(`Failed to create expense: ${errorMessage} (Status: ${errorStatus})`)
     }
   }
 
   // Update expense with validation
-  const handleUpdateExpense = async (updates: any) => {
+  const handleUpdateExpense = async (updates: UpdateExpenseInput) => {
     try {
       const result = await updateExpenseMutation(updates).unwrap()
       return result
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to update expense:', error)
       throw error
     }
@@ -133,7 +135,7 @@ export function useExpenses(options: UseExpensesOptions = {}) {
     try {
       const result = await deleteExpenseMutation(id).unwrap()
       return result
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to delete expense:', error)
       throw error
     }
@@ -141,7 +143,7 @@ export function useExpenses(options: UseExpensesOptions = {}) {
 
   // Get expenses for a specific category
   const getExpensesByCategory = (category: string) => {
-    return expenses.filter(expense => expense.category === category)
+    return expenses.filter((expense: ExpenseItem) => expense.category === category)
   }
 
   return {

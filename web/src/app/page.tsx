@@ -7,26 +7,24 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { naturalExpenseInputSchema } from '@/lib/validations'
+import { naturalExpenseInputSchema, type UpdateExpenseInput } from '@/lib/validations'
 import type { ExpenseItem } from '@/store/api/generated/expenses'
+import { EditExpenseDialog } from '@/components/EditExpenseDialog'
+import { AnalyticsView } from '@/components/views/AnalyticsView'
+import { CalendarView } from '@/components/views/CalendarView'
+import { TrendsView } from '@/components/views/TrendsView'
 
 export default function Page() {
   const [inputValue, setInputValue] = useState('')
   const [selectedView, setSelectedView] = useState('kanban')
-  const [selectedFilter, setSelectedFilter] = useState('all')
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
+  const [editingExpense, setEditingExpense] = useState<ExpenseItem | null>(null)
   
   const { theme, toggleTheme } = useTheme()
   
-  // Apply filters based on selected options
-  const filterOptions = {
-    filters: selectedFilter === 'week' ? { 
-      fromDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) 
-    } : selectedFilter === 'month' ? { 
-      fromDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) 
-    } : undefined
-  }
+  // No filters - show all expenses
+  const filterOptions = {}
   
   const { 
     expenses, 
@@ -35,9 +33,12 @@ export default function Page() {
     isLoading, 
     isCreating,
     createExpense,
+    updateExpense,
     deleteExpense,
+    isUpdating,
     error
   } = useExpenses(filterOptions)
+  
 
   // Categories with updated colors and icons
   const categories = [
@@ -99,8 +100,8 @@ export default function Page() {
 
   const getCategoryTotal = (categoryName: string) => {
     const categoryData = expensesByCategory.find(cat => cat.category === categoryName)
-    if (!categoryData?.items) return 0
-    return categoryData.items.reduce((sum: number, item: any) => sum + (item.amount || 0), 0)
+    if (!categoryData?.items || !Array.isArray(categoryData.items)) return 0
+    return categoryData.items.reduce((sum: number, item: ExpenseItem) => sum + (item.amount || 0), 0)
   }
 
 
@@ -124,10 +125,14 @@ export default function Page() {
       
       await createExpense(inputValue.trim())
       setInputValue('')
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error adding expense:', error)
       // Set validation error to show inline
-      setValidationError(error?.message || error?.data?.message || 'Failed to add expense')
+      const errorMessage = error instanceof Error ? error.message : 
+        (error as { data?: { message?: string }; message?: string })?.data?.message || 
+        (error as { message?: string })?.message || 
+        'Failed to add expense'
+      setValidationError(errorMessage)
     }
   }
 
@@ -136,12 +141,37 @@ export default function Page() {
     if (confirm('Are you sure you want to delete this expense?')) {
       try {
         await deleteExpense(id)
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Error deleting expense:', error)
-        alert(`Failed to delete expense: ${error.message || 'Please try again'}`)
+        const errorMessage = error instanceof Error ? error.message : 'Please try again'
+        alert(`Failed to delete expense: ${errorMessage}`)
       }
     }
   }
+
+  // Handle expense editing
+  const handleEdit = (expense: ExpenseItem) => {
+    setEditingExpense(expense)
+  }
+
+  const handleUpdateExpense = async (updates: UpdateExpenseInput) => {
+    try {
+      await updateExpense(updates)
+    } catch (error: unknown) {
+      console.error('Error updating expense:', error)
+      throw error // Let the dialog handle the error display
+    }
+  }
+
+  // Apply category filter to expenses
+  const filteredExpenses = selectedCategory 
+    ? expenses.filter((expense: ExpenseItem) => expense.category === selectedCategory)
+    : expenses
+
+  // Apply category filter to expensesByCategory
+  const filteredExpensesByCategory = selectedCategory
+    ? expensesByCategory.filter(cat => cat.category === selectedCategory)
+    : expensesByCategory
 
   if (isLoading) {
     return (
@@ -163,7 +193,10 @@ export default function Page() {
             <div className="text-4xl mb-4">⚠️</div>
             <h3 className="text-lg font-semibold mb-2 text-destructive">Failed to Load Expenses</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              {error?.message || error?.data?.message || 'Could not connect to the API service'}
+              {'message' in error ? error.message : 
+               'data' in error && error.data && typeof error.data === 'object' && 'message' in error.data ? 
+               (error.data as { message: string }).message : 
+               'Could not connect to the API service'}
             </p>
             <Button onClick={() => window.location.reload()}>
               Try Again
@@ -185,7 +218,7 @@ export default function Page() {
             
             {/* Today's Total */}
             <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg mb-6">
-              <div className="text-sm text-muted-foreground mb-1">💵 Today's Total</div>
+              <div className="text-sm text-muted-foreground mb-1">💵 Today&apos;s Total</div>
               <div className="text-3xl font-bold">${totals.daily.toFixed(2)}</div>
             </div>
           </div>
@@ -227,7 +260,7 @@ export default function Page() {
                   selectedView === 'trends' ? 'bg-secondary' : 'hover:bg-secondary/50'
                 }`}
               >
-                <span>📈</span>
+                <span>📊</span>
                 <span>Trends</span>
               </button>
             </div>
@@ -258,30 +291,6 @@ export default function Page() {
             </div>
           </div>
 
-          {/* Filters */}
-          <div className="space-y-3 mb-6">
-            <h3 className="text-sm font-medium text-muted-foreground">Filters</h3>
-            <div className="space-y-1">
-              <button 
-                onClick={() => setSelectedFilter(selectedFilter === 'week' ? 'all' : 'week')}
-                className={`flex items-center gap-2 p-2 text-sm rounded-md w-full text-left transition-colors ${
-                  selectedFilter === 'week' ? 'bg-secondary' : 'hover:bg-secondary/50'
-                }`}
-              >
-                <span>⏰</span>
-                <span>This Week</span>
-              </button>
-              <button 
-                onClick={() => setSelectedFilter(selectedFilter === 'month' ? 'all' : 'month')}
-                className={`flex items-center gap-2 p-2 text-sm rounded-md w-full text-left transition-colors ${
-                  selectedFilter === 'month' ? 'bg-secondary' : 'hover:bg-secondary/50'
-                }`}
-              >
-                <span>📅</span>
-                <span>This Month</span>
-              </button>
-            </div>
-          </div>
         </div>
 
         {/* Settings at bottom */}
@@ -348,103 +357,167 @@ export default function Page() {
 
         {/* Scrollable Content */}
         <div className="flex-1 p-6 overflow-y-auto">
-          {expenses.length === 0 ? (
+          {filteredExpenses.length === 0 ? (
             <Card className="text-center py-12">
               <CardContent>
                 <div className="text-6xl mb-4">📝</div>
-                <h3 className="text-xl font-semibold mb-2">Start Tracking Your Expenses</h3>
+                <h3 className="text-xl font-semibold mb-2">
+                  {selectedCategory ? `No ${selectedCategory} expenses` : 'Start Tracking Your Expenses'}
+                </h3>
                 <p className="text-muted-foreground max-w-md mx-auto">
-                  Add your first expense using the input above. Just type naturally like "Coffee $4.50" 
-                  and we'll automatically categorize it for you.
+                  {selectedCategory 
+                    ? `No expenses found in the ${selectedCategory} category. Try selecting a different category or clear the filter.`
+                    : 'Add your first expense using the input above. Just type naturally like "Coffee $4.50" and we\'ll automatically categorize it for you.'
+                  }
                 </p>
+                {selectedCategory && (
+                  <Button 
+                    onClick={() => setSelectedCategory(null)}
+                    variant="outline" 
+                    className="mt-4"
+                  >
+                    Clear Filter
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ) : (
-            /* Expense Categories - Kanban Style */
-            <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6">
-              {categories.map(category => {
-                const count = getCategoryCount(category.name)
-                const total = getCategoryTotal(category.name)
-                const categoryExpenses = (expensesByCategory.find(cat => cat.category === category.name)?.items || []) as ExpenseItem[]
-                
-                return (
-                  <Card key={category.name} className={`${category.color} ${category.darkColor} border-2 h-fit`}>
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg">{category.icon}</span>
-                          <h3 className="font-semibold">{category.name}</h3>
-                        </div>
-                        <Badge className={`${category.badgeColor} text-white`}>
-                          {count}
-                        </Badge>
-                      </div>
-                      
-                      <div className="text-sm text-muted-foreground mb-3">
-                        Total: ${total.toFixed(2)}
-                      </div>
+            <div>
+              {selectedView === 'kanban' && (
+                /* Expense Categories - Kanban Style */
+                <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6">
+                  {categories.map(category => {
+                    // Skip categories that don't match the filter
+                    if (selectedCategory && selectedCategory !== category.name) {
+                      return null
+                    }
+                    
+                    const count = getCategoryCount(category.name)
+                    const total = getCategoryTotal(category.name)
+                    const categoryExpenses = (filteredExpensesByCategory.find(cat => cat.category === category.name)?.items || []) as ExpenseItem[]
+                    
+                    // Skip empty categories when filtering
+                    if (selectedCategory && categoryExpenses.length === 0) {
+                      return null
+                    }
+                    
+                    return (
+                      <Card key={category.name} className={`${category.color} ${category.darkColor} border-2 h-fit`}>
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg">{category.icon}</span>
+                              <h3 className="font-semibold">{category.name}</h3>
+                            </div>
+                            <Badge className={`${category.badgeColor} text-white`}>
+                              {count}
+                            </Badge>
+                          </div>
+                          
+                          <div className="text-sm text-muted-foreground mb-3">
+                            Total: ${total.toFixed(2)}
+                          </div>
 
-                      <div className="space-y-2">
-                        {categoryExpenses.length === 0 ? (
-                          <p className="text-center text-muted-foreground py-8">No expenses yet</p>
-                        ) : (
-                          categoryExpenses.slice(0, 4).map((expense: ExpenseItem) => (
-                            <Card key={expense.id} className="bg-background/50 backdrop-blur-sm">
-                              <CardContent className="p-3">
-                                <div className="flex items-center justify-between">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="font-medium text-sm truncate">{expense.description}</div>
-                                    <div className="text-xs text-muted-foreground mt-1">
-                                      {new Date(expense.date || '').toLocaleDateString()}
+                          <div className="space-y-2">
+                            {categoryExpenses.length === 0 ? (
+                              <p className="text-center text-muted-foreground py-8">No expenses yet</p>
+                            ) : (
+                              categoryExpenses.slice(0, 4).map((expense: ExpenseItem) => (
+                                <Card key={expense.id} className="bg-background/50 backdrop-blur-sm">
+                                  <CardContent className="p-3">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex-1 min-w-0">
+                                        <div className="font-medium text-sm truncate">{expense.description || 'No description'}</div>
+                                        <div className="text-xs text-muted-foreground mt-1">
+                                          {expense.date ? (() => {
+                                            try {
+                                              return new Date(expense.date).toLocaleDateString()
+                                            } catch {
+                                              return 'Invalid date'
+                                            }
+                                          })() : 'No date'}
+                                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-1 ml-2">
+                                        <span className="font-semibold text-teal-600 text-sm">
+                                          ${(expense.amount || 0).toFixed(2)}
+                                        </span>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleEdit(expense)}
+                                          className="h-6 w-6 p-0 hover:bg-primary hover:text-primary-foreground"
+                                          title="Edit expense"
+                                        >
+                                          ✏️
+                                        </Button>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handleDelete(expense.id!)}
+                                          className="h-6 w-6 p-0 hover:bg-destructive hover:text-destructive-foreground"
+                                          title="Delete expense"
+                                        >
+                                          🗑️
+                                        </Button>
+                                      </div>
                                     </div>
-                                  </div>
-                                  <div className="flex items-center gap-2 ml-2">
-                                    <span className="font-semibold text-teal-600 text-sm">
-                                      ${expense.amount?.toFixed(2)}
-                                    </span>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={() => handleDelete(expense.id!)}
-                                      className="h-6 w-6 p-0 hover:bg-destructive hover:text-destructive-foreground"
-                                    >
-                                      🗑️
-                                    </Button>
-                                  </div>
-                                </div>
-                                {/* Tags */}
-                                {(expense.rawText?.includes('lunch') || expense.rawText?.includes('campus')) && (
-                                  <div className="flex gap-1 mt-2">
-                                    {expense.rawText?.includes('lunch') && (
-                                      <Badge variant="secondary" className="text-xs px-2 py-0 bg-orange-500 text-white">
-                                        lunch
-                                      </Badge>
+                                    {/* Tags */}
+                                    {(expense.rawText?.includes('lunch') || expense.rawText?.includes('campus')) && (
+                                      <div className="flex gap-1 mt-2">
+                                        {expense.rawText?.includes('lunch') && (
+                                          <Badge variant="secondary" className="text-xs px-2 py-0 bg-orange-500 text-white">
+                                            lunch
+                                          </Badge>
+                                        )}
+                                        {expense.rawText?.includes('campus') && (
+                                          <Badge variant="secondary" className="text-xs px-2 py-0 bg-orange-500 text-white">
+                                            campus
+                                          </Badge>
+                                        )}
+                                      </div>
                                     )}
-                                    {expense.rawText?.includes('campus') && (
-                                      <Badge variant="secondary" className="text-xs px-2 py-0 bg-orange-500 text-white">
-                                        campus
-                                      </Badge>
-                                    )}
-                                  </div>
-                                )}
-                              </CardContent>
-                            </Card>
-                          ))
-                        )}
-                        {categoryExpenses.length > 4 && (
-                          <p className="text-center text-xs text-muted-foreground">
-                            +{categoryExpenses.length - 4} more expenses
-                          </p>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )
-              })}
+                                  </CardContent>
+                                </Card>
+                              ))
+                            )}
+                            {categoryExpenses.length > 4 && (
+                              <p className="text-center text-xs text-muted-foreground">
+                                +{categoryExpenses.length - 4} more expenses
+                              </p>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )
+                  }).filter(Boolean)}
+                </div>
+              )}
+              
+              {selectedView === 'analytics' && (
+                <AnalyticsView expenses={filteredExpenses} totals={totals} />
+              )}
+              
+              {selectedView === 'calendar' && (
+                <CalendarView expenses={filteredExpenses} onDeleteExpense={handleDelete} />
+              )}
+              
+              {selectedView === 'trends' && (
+                <TrendsView expenses={filteredExpenses} totals={totals} />
+              )}
             </div>
           )}
         </div>
       </div>
+      
+      {/* Edit Expense Dialog */}
+      <EditExpenseDialog
+        expense={editingExpense}
+        isOpen={!!editingExpense}
+        onClose={() => setEditingExpense(null)}
+        onSave={handleUpdateExpense}
+        isUpdating={isUpdating}
+      />
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { expensesApi } from '../generated/expenses'
-import type { ExpenseFiltersInput, UpdateExpenseInput, CreateExpenseInput } from '@/lib/validations'
+import type { UpdateExpenseInput } from '@/lib/validations'
+import type { ExpenseItem } from '../generated/expenses'
 
 // Define expense filter interface
 interface ExpenseFilters {
@@ -32,7 +33,7 @@ export const enhancedExpensesApi = expensesApi.injectEndpoints({
       providesTags: (result) => 
         result
           ? [
-              ...result.map((expense: any) => ({ type: 'Expense' as const, id: expense.id })),
+              ...result.map((expense: ExpenseItem) => ({ type: 'Expense' as const, id: expense.id })),
               { type: 'Expense', id: 'LIST' }
             ]
           : [{ type: 'Expense', id: 'LIST' }],
@@ -45,7 +46,7 @@ export const enhancedExpensesApi = expensesApi.injectEndpoints({
       query: (id: number) => ({
         url: `/api/Expenses/${id}`
       }),
-      providesTags: (result, error, id) => [{ type: 'Expense', id }],
+      providesTags: (_result, _error, id) => [{ type: 'Expense', id }],
     }),
 
     // Create expense with validation
@@ -77,7 +78,7 @@ export const enhancedExpensesApi = expensesApi.injectEndpoints({
 
         const patchResult = dispatch(
           enhancedExpensesApi.util.updateQueryData('getExpenses', {}, (draft) => {
-            draft.unshift(optimisticExpense as any)
+            draft.unshift(optimisticExpense as ExpenseItem)
           })
         )
 
@@ -97,7 +98,7 @@ export const enhancedExpensesApi = expensesApi.injectEndpoints({
         method: 'PUT',
         body: { id, ...updates },
       }),
-      invalidatesTags: (result, error, { id }) => [
+      invalidatesTags: (_result, _error, { id }) => [
         { type: 'Expense', id },
         { type: 'Expense', id: 'LIST' },
         { type: 'ExpenseSummary', id: 'LIST' },
@@ -107,7 +108,7 @@ export const enhancedExpensesApi = expensesApi.injectEndpoints({
       async onQueryStarted(updates, { dispatch, queryFulfilled }) {
         const patchResult = dispatch(
           enhancedExpensesApi.util.updateQueryData('getExpenses', {}, (draft) => {
-            const index = draft.findIndex((expense: any) => expense.id === updates.id)
+            const index = draft.findIndex((expense: ExpenseItem) => expense.id === updates.id)
             if (index !== -1) {
               Object.assign(draft[index], updates, { updatedAt: new Date().toISOString() })
             }
@@ -128,7 +129,7 @@ export const enhancedExpensesApi = expensesApi.injectEndpoints({
         url: `/api/Expenses/${id}`,
         method: 'DELETE',
       }),
-      invalidatesTags: (result, error, id) => [
+      invalidatesTags: (_result, _error, id) => [
         { type: 'Expense', id },
         { type: 'Expense', id: 'LIST' },
         { type: 'ExpenseSummary', id: 'LIST' },
@@ -139,7 +140,7 @@ export const enhancedExpensesApi = expensesApi.injectEndpoints({
         // Update all relevant queries optimistically
         const patchResults = dispatch(
           enhancedExpensesApi.util.updateQueryData('getExpenses', {}, (draft) => {
-            const index = draft.findIndex((expense: any) => expense.id === id)
+            const index = draft.findIndex((expense: ExpenseItem) => expense.id === id)
             if (index !== -1) {
               draft.splice(index, 1)
             }
@@ -166,7 +167,7 @@ export const enhancedExpensesApi = expensesApi.injectEndpoints({
           url: `/api/Expenses?${params.toString()}`
         }
       },
-      transformResponse: (expenses: any[]) => {
+      transformResponse: (expenses: ExpenseItem[]) => {
         // Group expenses by category and calculate totals
         const categoryTotals = expenses.reduce((acc, expense) => {
           const category = expense.category || 'Other'
@@ -178,15 +179,15 @@ export const enhancedExpensesApi = expensesApi.injectEndpoints({
               items: []
             }
           }
-          acc[category].total += expense.amount
+          acc[category].total += expense.amount || 0
           acc[category].count += 1
           acc[category].items.push(expense)
           return acc
-        }, {} as Record<string, any>)
+        }, {} as Record<string, { category: string; total: number; count: number; items: ExpenseItem[] }>)
 
         return {
           categoryTotals: Object.values(categoryTotals),
-          totalAmount: expenses.reduce((sum, exp) => sum + exp.amount, 0),
+          totalAmount: expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0),
           totalCount: expenses.length,
           recentExpenses: expenses.slice(0, 10)
         }
