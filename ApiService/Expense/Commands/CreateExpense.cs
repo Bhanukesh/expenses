@@ -2,20 +2,20 @@ namespace ApiService.Expense.Commands;
 
 using MediatR;
 using Data;
-using System.Text.Json;
 using System.Text.RegularExpressions;
+using ApiService.Services;
 
 public record CreateExpenseCommand(string RawText) : IRequest<int>;
 
-public class CreateExpenseHandler(ExpenseDbContext context, IHttpClientFactory httpClientFactory) : IRequestHandler<CreateExpenseCommand, int>
+public class CreateExpenseHandler(ExpenseDbContext context, ExpenseCategorizer categorizer) : IRequestHandler<CreateExpenseCommand, int>
 {
     public async Task<int> Handle(CreateExpenseCommand request, CancellationToken cancellationToken)
     {
         // Parse the raw text to extract description and amount
         var (description, amount) = ParseExpenseText(request.RawText);
         
-        // Call Python API for categorization only
-        var category = await GetCategoryFromPythonApi(description, amount, cancellationToken);
+        // Use C# categorization service
+        var category = categorizer.CategorizeExpense(description);
 
         // Extract additional metadata from raw text
         var tags = ExtractTags(request.RawText);
@@ -74,58 +74,6 @@ public class CreateExpenseHandler(ExpenseDbContext context, IHttpClientFactory h
         return (string.IsNullOrEmpty(description) ? "Expense" : description, amount);
     }
     
-    private async Task<string> GetCategoryFromPythonApi(string description, decimal amount, CancellationToken cancellationToken)
-    {
-        try
-        {
-            using var httpClient = httpClientFactory.CreateClient();
-            httpClient.BaseAddress = new Uri("http://localhost:8000");
-            
-            var request = new { description, amount };
-            var jsonContent = JsonSerializer.Serialize(request);
-            var httpContent = new StringContent(jsonContent, System.Text.Encoding.UTF8, "application/json");
-            
-            var response = await httpClient.PostAsync("/api/Expenses/categorize", httpContent, cancellationToken);
-            
-            if (response.IsSuccessStatusCode)
-            {
-                var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
-                var categorization = JsonSerializer.Deserialize<CategorizationResponse>(responseJson, new JsonSerializerOptions 
-                { 
-                    PropertyNameCaseInsensitive = true 
-                });
-                
-                return categorization?.Category ?? "Other";
-            }
-        }
-        catch
-        {
-            // Fall back to basic categorization if Python API is not available
-        }
-        
-        // Basic fallback categorization
-        return GetBasicCategory(description);
-    }
-    
-    private static string GetBasicCategory(string description)
-    {
-        var lowerDesc = description.ToLower();
-        
-        if (lowerDesc.Contains("pizza") || lowerDesc.Contains("food") || lowerDesc.Contains("coffee") || lowerDesc.Contains("lunch") || lowerDesc.Contains("dinner") || lowerDesc.Contains("restaurant"))
-            return "Food";
-        if (lowerDesc.Contains("uber") || lowerDesc.Contains("gas") || lowerDesc.Contains("transport") || lowerDesc.Contains("bus") || lowerDesc.Contains("taxi") || lowerDesc.Contains("metro"))
-            return "Transport";
-        if (lowerDesc.Contains("movie") || lowerDesc.Contains("entertainment") || lowerDesc.Contains("concert") || lowerDesc.Contains("game"))
-            return "Entertainment";
-        if (lowerDesc.Contains("shop") || lowerDesc.Contains("store") || lowerDesc.Contains("buy"))
-            return "Shopping";
-        if (lowerDesc.Contains("hospital") || lowerDesc.Contains("doctor") || lowerDesc.Contains("medicine") || lowerDesc.Contains("pharmacy"))
-            return "Health";
-        if (lowerDesc.Contains("book") || lowerDesc.Contains("course") || lowerDesc.Contains("school") || lowerDesc.Contains("university"))
-            return "Education";
-            
-        return "Other";
-    }
     
     private static List<string> ExtractTags(string rawText)
     {
@@ -187,8 +135,3 @@ public class CreateExpenseHandler(ExpenseDbContext context, IHttpClientFactory h
     }
 }
 
-public class CategorizationResponse
-{
-    public string Category { get; set; } = string.Empty;
-    public float Confidence { get; set; }
-}

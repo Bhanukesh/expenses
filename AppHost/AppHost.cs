@@ -18,19 +18,9 @@ var apiService = builder.AddProject<Projects.ApiService>("apiservice")
     .WaitFor(migrationService)
     .WithHttpHealthCheck("/health");
 
-// Python API with health check  
-#pragma warning disable ASPIREHOSTINGPYTHON001
-var pythonApi = builder.AddPythonApp("pythonapi", "../PythonApi", "run_app.py")
-    .WithHttpEndpoint(port: 8000, env: "PORT")
-    .WithHttpHealthCheck("/health")
-    .WithExternalHttpEndpoints()
-    .WithEnvironment("HOST", "127.0.0.1");
-#pragma warning restore ASPIREHOSTINGPYTHON001
-
 // Web application - marked as default to open in browser
 builder.AddNpmApp("web", "../web", "dev")
     .WithReference(apiService)
-    .WithReference(pythonApi)
     .WithHttpEndpoint(3000, env: "PORT")
     .WithExternalHttpEndpoints()
     .PublishAsDockerFile();

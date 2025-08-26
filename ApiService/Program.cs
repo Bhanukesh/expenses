@@ -1,5 +1,6 @@
 using System.Reflection;
 using Data;
+using ApiService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,8 +20,8 @@ builder.Services.AddMediatR(cfg =>
 });
 builder.Services.AddEndpointsApiExplorer();
 
-// Add HTTP client for Python API integration
-builder.Services.AddHttpClient();
+// Add expense categorization service
+builder.Services.AddSingleton<ExpenseCategorizer>();
 
 // Add database context
 builder.AddSqlServerDbContext<ExpenseDbContext>("expensedb");
