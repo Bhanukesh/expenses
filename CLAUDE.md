@@ -42,7 +42,7 @@ pnpm generate-api
 This is a full-stack application using **CQRS with Mediator pattern** on the backend and **Next.js with RTK Query** on the frontend.
 
 ### Backend Architecture (ASP.NET Core)
-- **CQRS Pattern**: Commands and Queries are separated in `ApiService/Todo/Commands/` and `ApiService/Todo/Queries/`
+- **CQRS Pattern**: Commands and Queries are separated in `ApiService/Expense/Commands/` and `ApiService/Expense/Queries/`
 - **MediatR**: All business logic flows through MediatR handlers, controllers are thin
 - **Entity Framework Core**: Data access via DbContext in `ApiService/Data/`
 - **API-First**: OpenAPI spec is auto-generated, frontend consumes it via code generation

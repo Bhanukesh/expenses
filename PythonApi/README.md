@@ -1,10 +1,10 @@
-# Todo API - Python FastAPI Implementation
+# Expense API - Python FastAPI Implementation
 
-A FastAPI implementation of the Todo API matching the OpenAPI specification from the ASP.NET Core project.
+A FastAPI implementation of the Expense API matching the OpenAPI specification from the ASP.NET Core project.
 
 ## Features
 
-- RESTful API for Todo CRUD operations
+- RESTful API for Expense CRUD operations
 - In-memory database with thread-safe operations  
 - CORS enabled for cross-origin requests
 - Comprehensive test coverage (91%)
@@ -34,10 +34,10 @@ The API will be available at `http://localhost:8000`
 
 ## API Endpoints
 
-- `GET /api/Todos` - Get all todos
-- `POST /api/Todos` - Create a new todo
-- `PUT /api/Todos/{id}` - Update an existing todo
-- `DELETE /api/Todos/{id}` - Delete a todo
+- `GET /api/Expenses` - Get all expenses
+- `POST /api/Expenses` - Create a new expense
+- `PUT /api/Expenses/{id}` - Update an existing expense
+- `DELETE /api/Expenses/{id}` - Delete an expense
 
 ## Testing
 
@@ -61,7 +61,7 @@ pytest tests/test_api.py       # Integration tests for API
 
 ### Run specific test
 ```bash
-pytest tests/test_api.py::TestTodoAPI::test_create_todo
+pytest tests/test_api.py::TestExpenseAPI::test_create_expense
 ```
 
 The tests include:

@@ -56,3 +56,6 @@ app.MapGet("/health", () => "Healthy");
 app.UseOpenApi();
 app.UseSwaggerUi();
 app.Run();
+
+// Make Program class accessible for integration tests
+public partial class Program { }
