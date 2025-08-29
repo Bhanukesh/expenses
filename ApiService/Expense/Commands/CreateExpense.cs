@@ -11,14 +11,25 @@ public class CreateExpenseHandler(ExpenseDbContext context, ExpenseCategorizer c
 {
     public async Task<int> Handle(CreateExpenseCommand request, CancellationToken cancellationToken)
     {
+        // Validate input
+        if (string.IsNullOrWhiteSpace(request.RawText))
+        {
+            throw new ArgumentException("Expense text cannot be empty", nameof(request));
+        }
+
+        if (request.RawText.Length > 1000)
+        {
+            throw new ArgumentException("Expense text is too long (max 1000 characters)", nameof(request));
+        }
+
         // Parse the raw text to extract description and amount
         var (description, amount) = ParseExpenseText(request.RawText);
         
-        // Use C# categorization service
-        var category = categorizer.CategorizeExpense(description);
+        // Use C# categorization service with semantic fallback
+        var category = await categorizer.CategorizeExpenseAsync(description, cancellationToken);
 
         // Extract additional metadata from raw text
-        var tags = ExtractTags(request.RawText);
+        var tags = await categorizer.ExtractTagsAsync(description, cancellationToken);
         var location = ExtractLocation(request.RawText);
         
         // Create entity in SQL Server database
@@ -49,9 +60,9 @@ public class CreateExpenseHandler(ExpenseDbContext context, ExpenseCategorizer c
         // Try to find amount patterns: $12.50, 12.50, $12, 12
         var amountPatterns = new[]
         {
-            @"\$(\d+\.?\d*)",  // $12.50 or $12
-            @"(\d+\.?\d*)\s*\$",  // 12.50$ or 12$
-            @"(\d+\.?\d*)",  // Just numbers (last resort)
+            @"\$(\d+(?:\.\d{1,2})?)\b",  // $12.50 or $12 (word boundary, max 2 decimals)
+            @"\b(\d+(?:\.\d{1,2})?)\s*\$",  // 12.50$ or 12$ (word boundary)
+            @"\b(\d+(?:\.\d{1,2})?)\b",  // Just numbers with word boundaries (last resort)
         };
         
         decimal amount = 0;
@@ -62,10 +73,14 @@ public class CreateExpenseHandler(ExpenseDbContext context, ExpenseCategorizer c
             var matches = Regex.Matches(text, pattern, RegexOptions.IgnoreCase);
             if (matches.Count > 0)
             {
-                if (decimal.TryParse(matches[^1].Groups[1].Value, out amount))
+                var lastMatch = matches[^1];
+                if (decimal.TryParse(lastMatch.Groups[1].Value, out amount))
                 {
-                    // Remove the amount from description
-                    description = Regex.Replace(text, @"\$?\d+\.?\d*\$?", "").Trim();
+                    var matchedAmountText = lastMatch.Value;
+                    // Remove the specific matched amount from description
+                    description = text.Replace(matchedAmountText, "").Trim();
+                    // Clean up extra spaces
+                    description = Regex.Replace(description, @"\s+", " ").Trim();
                     break;
                 }
             }
@@ -74,37 +89,6 @@ public class CreateExpenseHandler(ExpenseDbContext context, ExpenseCategorizer c
         return (string.IsNullOrEmpty(description) ? "Expense" : description, amount);
     }
     
-    
-    private static List<string> ExtractTags(string rawText)
-    {
-        var tags = new List<string>();
-        var lowerText = rawText.ToLower();
-        
-        // Common tags based on keywords
-        var tagMap = new Dictionary<string, string[]>
-        {
-            ["lunch"] = ["lunch", "meal"],
-            ["dinner"] = ["dinner", "meal"],
-            ["breakfast"] = ["breakfast", "meal"],
-            ["coffee"] = ["coffee", "drink"],
-            ["campus"] = ["campus", "university"],
-            ["work"] = ["work", "office"],
-            ["home"] = ["home"],
-            ["urgent"] = ["urgent", "emergency"],
-            ["monthly"] = ["monthly", "recurring"],
-            ["weekly"] = ["weekly", "recurring"]
-        };
-        
-        foreach (var (keyword, keywordTags) in tagMap)
-        {
-            if (lowerText.Contains(keyword))
-            {
-                tags.AddRange(keywordTags);
-            }
-        }
-        
-        return tags.Distinct().ToList();
-    }
     
     private static string? ExtractLocation(string rawText)
     {
@@ -119,14 +103,17 @@ public class CreateExpenseHandler(ExpenseDbContext context, ExpenseCategorizer c
             if (index >= 0)
             {
                 var locationStart = index + keyword.Length;
-                var remainingText = rawText.Substring(locationStart);
-                
-                // Take the next word(s) as location
-                var words = remainingText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                if (words.Length > 0)
+                if (locationStart < rawText.Length)
                 {
-                    // Take up to 3 words as location
-                    return string.Join(" ", words.Take(Math.Min(3, words.Length)));
+                    var remainingText = rawText[locationStart..];
+                    
+                    // Take the next word(s) as location
+                    var words = remainingText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    if (words.Length > 0)
+                    {
+                        // Take up to 3 words as location
+                        return string.Join(" ", words.Take(Math.Min(3, words.Length)));
+                    }
                 }
             }
         }

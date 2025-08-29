@@ -39,6 +39,21 @@ public class ExpensesControllerTests : IClassFixture<WebApplicationFactory<Progr
                 {
                     options.UseInMemoryDatabase($"TestDb_{Guid.NewGuid()}");
                 });
+                
+                // Remove OpenAI services to avoid API calls during testing
+                var openAIDescriptors = services.Where(d => 
+                    d.ServiceType.FullName?.Contains("OpenAI") == true ||
+                    d.ServiceType.Name == "SemanticExpenseCategorizer" ||
+                    d.ServiceType.Name == "ExpenseCategorizer")
+                    .ToList();
+                
+                foreach (var descriptor in openAIDescriptors)
+                {
+                    services.Remove(descriptor);
+                }
+                
+                // Add basic ExpenseCategorizer without semantic features for testing
+                services.AddSingleton<ApiService.Services.ExpenseCategorizer>();
             });
         });
 

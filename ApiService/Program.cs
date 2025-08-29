@@ -1,6 +1,7 @@
 using System.Reflection;
 using Data;
 using ApiService.Services;
+using OpenAI;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,8 +21,22 @@ builder.Services.AddMediatR(cfg =>
 });
 builder.Services.AddEndpointsApiExplorer();
 
-// Add expense categorization service
-builder.Services.AddSingleton<ExpenseCategorizer>();
+// Add OpenAI client
+var openAIApiKey = builder.Configuration["OpenAI:ApiKey"];
+var isTestingEnvironment = builder.Environment.IsEnvironment("Testing");
+
+if (!string.IsNullOrEmpty(openAIApiKey) && !isTestingEnvironment)
+{
+    builder.Services.AddSingleton<OpenAIClient>(_ => new OpenAIClient(openAIApiKey));
+    builder.Services.AddSingleton<SemanticExpenseCategorizer>();
+    builder.Services.AddSingleton<ExpenseCategorizer>(provider =>
+        new ExpenseCategorizer(provider.GetService<SemanticExpenseCategorizer>()));
+}
+else
+{
+    // Fallback to rule-based only categorization (for testing or when no API key is configured)
+    builder.Services.AddSingleton<ExpenseCategorizer>();
+}
 
 // Add database context
 builder.AddSqlServerDbContext<ExpenseDbContext>("expensedb");
